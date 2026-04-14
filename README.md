@@ -1,6 +1,8 @@
 # zuit
 
-A test lifecycle library for Zig. Adds `beforeAll`, `afterAll`, `beforeEach`, and `afterEach` hooks to your test suites — scoped globally or per-file — with configurable output styles, hook failure handling, and CI-ready reporting.
+A custom test runner and lifecycle library for Zig. It replaces the built-in test runner, giving you `beforeAll`, `afterAll`, `beforeEach`, and `afterEach` hooks scoped globally or per-file, configurable output styles, hook failure handling, and CI-ready reporting.
+
+**How it works:** Zig lets you swap the default test runner by pointing your build at a file that provides `pub fn main()`. zuit's runner is that file — it receives all test functions via `builtin.test_functions`, manages the full hook lifecycle around each one, tracks results, and controls the process exit code. Your `test_runner.zig` simply calls `zuit.run(...)` with whatever configuration you need.
 
 > Requires Zig **0.15.2** or later.
 
@@ -8,6 +10,7 @@ A test lifecycle library for Zig. Adds `beforeAll`, `afterAll`, `beforeEach`, an
 
 ## Features
 
+- **Full test runner** — replaces Zig's built-in runner; receives all test functions, drives execution, and owns the process exit code
 - **Per-file hooks** — `beforeAll` / `afterAll` / `beforeEach` / `afterEach` declared as named test blocks, automatically scoped to the file they live in
 - **Global hooks** — `zuit:beforeAll` / `zuit:afterAll` etc. run across the entire suite; also injectable as function pointers in config
 - **Configurable failure handling** — choose abort, skip, or continue when a hook errors
@@ -62,7 +65,7 @@ test_step.dependOn(&run_tests.step);
 
 ## Setup
 
-Create `test_runner.zig` in your project root — this is the only file you need to write:
+Create `test_runner.zig` in your project root. This file becomes the entry point of the test binary — it *is* the runner. It's the only file you need to write:
 
 ```zig
 const std = @import("std");
@@ -394,7 +397,8 @@ zig build example -- --output-file results.txt      # + plain text
 ```zig
 const zuit = @import("zuit");
 
-// Run the full test suite.
+// Drive the entire test suite. Call this from pub fn main() in your
+// test_runner.zig — that makes zuit the runner for the test binary.
 pub fn run(config: Config) !void
 
 // Parse --output-file <path> or --output-file=<path> from process argv.
@@ -416,3 +420,4 @@ pub const Config = struct {
 pub const OnHookFailure = enum { abort, skip_remaining, @"continue" };
 pub const OutputStyle    = enum { minimal, verbose, verbose_timing };
 ```
+
