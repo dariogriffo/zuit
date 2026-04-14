@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  checks: write        # required by dorny/test-reporter to create check runs
+  pull-requests: write # required by dorny/test-reporter to annotate PRs
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: "0.15.2"
+
+      # Verify the library itself compiles and its own tests pass.
+      - name: zuit internal tests
+        run: zig build test
+
+      # Run the example test suite and emit a JUnit XML report.
+      # The runner exits 1 on failures, but we still want the XML written,
+      # so the test-reporter step can annotate the PR with exactly what broke.
+      - name: Example tests
+        run: zig build example -- --output-file test-results.xml
+
+      # Upload the raw XML so it is available as a workflow artifact.
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+          retention-days: 30
+
+      # Publish JUnit results as a GitHub check — shows pass/fail per test
+      # case in the "Checks" tab of the PR and in the job summary.
+      - name: Publish test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results
+          path: test-results.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      # Write a compact markdown table to the job summary page.
+      - name: Write job summary
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import xml.etree.ElementTree as ET, os, sys
+
+          path = "test-results.xml"
+          if not os.path.exists(path):
+              print("No test-results.xml found; skipping summary.", file=sys.stderr)
+              sys.exit(0)
+
+          root = ET.parse(path).getroot()
+          total    = int(root.get("tests",    0))
+          failures = int(root.get("failures", 0))
+          skipped  = int(root.get("skipped",  0))
+          passed   = total - failures - skipped
+
+          lines = []
+          lines.append("## Test Results\n")
+          lines.append("| ✅ Passed | ❌ Failed | ⏭ Skipped | Total |")
+          lines.append("|-----------|-----------|-----------|-------|")
+          lines.append(f"| {passed} | {failures} | {skipped} | {total} |")
+
+          if failures > 0:
+              lines.append("\n### Failed Tests\n")
+              for suite in root.findall("testsuite"):
+                  for tc in suite.findall("testcase"):
+                      fail = tc.find("failure")
+                      if fail is not None:
+                          name      = tc.get("name", "unknown")
+                          classname = tc.get("classname", "")
+                          msg       = fail.get("message", "test failed")
+                          prefix    = f"**{classname}** › " if classname else ""
+                          lines.append(f"- {prefix}{name}: `{msg}`")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          if summary:
+              with open(summary, "a") as f:
+                  f.write("\n".join(lines) + "\n")
+          else:
+              print("\n".join(lines))
+          EOF
