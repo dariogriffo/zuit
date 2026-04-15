@@ -27,7 +27,7 @@ jobs:
           version: "0.15.2"
 
       # Verify the library itself compiles and its own tests pass.
-      - name: zuit internal tests
+      - name: zunit internal tests
         run: zig build test
 
       # Run the example test suite and emit a JUnit XML report.

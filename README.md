@@ -1,8 +1,8 @@
-# zuit
+# zunit
 
 A custom test runner and lifecycle library for Zig. It replaces the built-in test runner, giving you `beforeAll`, `afterAll`, `beforeEach`, and `afterEach` hooks scoped globally or per-file, configurable output styles, hook failure handling, and CI-ready reporting.
 
-**How it works:** Zig lets you swap the default test runner by pointing your build at a file that provides `pub fn main()`. zuit's runner is that file — it receives all test functions via `builtin.test_functions`, manages the full hook lifecycle around each one, tracks results, and controls the process exit code. Your `test_runner.zig` simply calls `zuit.run(...)` with whatever configuration you need.
+**How it works:** Zig lets you swap the default test runner by pointing your build at a file that provides `pub fn main()`. zunit's runner is that file — it receives all test functions via `builtin.test_functions`, manages the full hook lifecycle around each one, tracks results, and controls the process exit code. Your `test_runner.zig` simply calls `zunit.run(...)` with whatever configuration you need.
 
 > Requires Zig **0.15.2** or later.
 
@@ -12,7 +12,7 @@ A custom test runner and lifecycle library for Zig. It replaces the built-in tes
 
 - **Full test runner** — replaces Zig's built-in runner; receives all test functions, drives execution, and owns the process exit code
 - **Per-file hooks** — `beforeAll` / `afterAll` / `beforeEach` / `afterEach` declared as named test blocks, automatically scoped to the file they live in
-- **Global hooks** — `zuit:beforeAll` / `zuit:afterAll` etc. run across the entire suite; also injectable as function pointers in config
+- **Global hooks** — `zunit:beforeAll` / `zunit:afterAll` etc. run across the entire suite; also injectable as function pointers in config
 - **Configurable failure handling** — choose abort, skip, or continue when a hook errors
 - **Three output styles** — minimal summary, verbose per-test, or verbose with nanosecond-precision timing
 - **File output** — write results to a plain text file or a JUnit-compatible XML report for CI dashboards
@@ -23,12 +23,12 @@ A custom test runner and lifecycle library for Zig. It replaces the built-in tes
 
 ## Installation
 
-Add zuit to your `build.zig.zon`:
+Add zunit to your `build.zig.zon`:
 
 ```zig
 .dependencies = .{
-    .zuit = .{
-        .url = "https://github.com/yourname/zuit/archive/<commit>.tar.gz",
+    .zunit = .{
+        .url = "https://github.com/yourname/zunit/archive/<commit>.tar.gz",
         .hash = "<hash>",
     },
 },
@@ -37,8 +37,8 @@ Add zuit to your `build.zig.zon`:
 In `build.zig`, fetch the dependency, expose the module, and wire it into your test step:
 
 ```zig
-const zuit_dep = b.dependency("zuit", .{ .target = target, .optimize = optimize });
-const zuit_mod = zuit_dep.module("zuit");
+const zunit_dep = b.dependency("zunit", .{ .target = target, .optimize = optimize });
+const zunit_mod = zunit_dep.module("zunit");
 
 const tests = b.addTest(.{
     .root_module = b.createModule(.{
@@ -51,7 +51,7 @@ const tests = b.addTest(.{
         .mode = .simple,
     },
 });
-tests.root_module.addImport("zuit", zuit_mod);
+tests.root_module.addImport("zunit", zunit_mod);
 
 const run_tests = b.addRunArtifact(tests);
 if (b.args) |args| run_tests.addArgs(args); // forward -- ... args to the runner
@@ -69,14 +69,14 @@ Create `test_runner.zig` in your project root. This file becomes the entry point
 
 ```zig
 const std = @import("std");
-const zuit = @import("zuit");
+const zunit = @import("zunit");
 
 pub fn main() !void {
-    try zuit.run(.{
+    try zunit.run(.{
         .on_global_hook_failure = .abort,
         .on_file_hook_failure   = .skip_remaining,
         .output                 = .verbose_timing,
-        .output_file = try zuit.outputFileArg(std.heap.page_allocator),
+        .output_file = try zunit.outputFileArg(std.heap.page_allocator),
     });
 }
 ```
@@ -95,7 +95,7 @@ zig build test -- --output-file results.txt         # + plain text report
 
 ### Per-file hooks
 
-Declare hooks as named test blocks anywhere in a `.zig` source file. zuit automatically scopes them to tests **in that file only**, matched by the module path prefix embedded in each test's full name.
+Declare hooks as named test blocks anywhere in a `.zig` source file. zunit automatically scopes them to tests **in that file only**, matched by the module path prefix embedded in each test's full name.
 
 ```zig
 const std = @import("std");
@@ -124,29 +124,29 @@ test "my feature works" {
 
 ### Global hooks (naming convention)
 
-Prefix with `zuit:` to make a hook apply to **all tests across all files**. Put them in whichever file makes sense for your project (e.g. `src/root.zig`):
+Prefix with `zunit:` to make a hook apply to **all tests across all files**. Put them in whichever file makes sense for your project (e.g. `src/root.zig`):
 
 ```zig
-test "zuit:beforeAll" {
+test "zunit:beforeAll" {
     // runs once before the entire suite starts
 }
 
-test "zuit:afterAll" {
+test "zunit:afterAll" {
     // runs once after the entire suite finishes
 }
 
-test "zuit:beforeEach" {
+test "zunit:beforeEach" {
     // runs before every test in every file
 }
 
-test "zuit:afterEach" {
+test "zunit:afterEach" {
     // runs after every test in every file
 }
 ```
 
 ### Global hooks (programmatic)
 
-Pass functions directly to `zuit.run(...)`. These run **before** the corresponding naming-convention global hooks:
+Pass functions directly to `zunit.run(...)`. These run **before** the corresponding naming-convention global hooks:
 
 ```zig
 fn setupDatabase() !void {
@@ -158,7 +158,7 @@ fn resetState() !void { ... }
 fn flushLogs() !void { ... }
 
 pub fn main() !void {
-    try zuit.run(.{
+    try zunit.run(.{
         .before_all  = setupDatabase,
         .after_all   = teardownDatabase,
         .before_each = resetState,
@@ -175,7 +175,7 @@ pub fn main() !void {
 [suite start]
 
   config.before_all           ← programmatic, once
-  zuit:beforeAll              ← named global, once
+  zunit:beforeAll              ← named global, once
 
   [for each file, in discovery order]
 
@@ -184,18 +184,18 @@ pub fn main() !void {
     [for each test in this file]
 
       config.before_each      ← programmatic global
-      zuit:beforeEach         ← named global
+      zunit:beforeEach         ← named global
       beforeEach              ← named per-file
 
       >>>  TEST  <<<
 
       afterEach               ← named per-file
-      zuit:afterEach          ← named global
+      zunit:afterEach          ← named global
       config.after_each       ← programmatic global
 
     afterAll                  ← named per-file, once per file
 
-  zuit:afterAll               ← named global, once
+  zunit:afterAll               ← named global, once
   config.after_all            ← programmatic, once
 
 [suite end]
@@ -207,10 +207,10 @@ Hook test blocks (all `beforeAll`, `afterAll`, etc.) are **never counted** in th
 
 ## Configuration reference
 
-Pass a `Config` literal to `zuit.run(...)`. All fields have defaults so you only need to specify what you want to change.
+Pass a `Config` literal to `zunit.run(...)`. All fields have defaults so you only need to specify what you want to change.
 
 ```zig
-try zuit.run(.{
+try zunit.run(.{
     .on_global_hook_failure = .abort,          // default
     .on_file_hook_failure   = .skip_remaining, // default
     .output                 = .verbose,        // default
@@ -258,7 +258,7 @@ Set it at compile time:
 Or read it from the command line at runtime with the `outputFileArg` helper:
 
 ```zig
-.output_file = try zuit.outputFileArg(std.heap.page_allocator),
+.output_file = try zunit.outputFileArg(std.heap.page_allocator),
 ```
 
 Then pass it when running:
@@ -291,7 +291,7 @@ zig build test -- --output-file=results.xml   # both forms are accepted
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="zuit" tests="4" failures="1" errors="0" skipped="1" time="0.000002001">
+<testsuites name="zunit" tests="4" failures="1" errors="0" skipped="1" time="0.000002001">
   <testsuite name="db" tests="4" failures="1" errors="0" skipped="1" time="0.000002001">
     <testcase name="insert: single row" classname="db" time="0.000000487"/>
     <testcase name="insert: batch"      classname="db" time="0.000001200"/>
@@ -311,7 +311,7 @@ The `time` attribute is in seconds with nanosecond precision. Test names and cla
 
 ## Memory leak detection
 
-zuit resets `std.testing.allocator_instance` before each test and checks for leaks after it completes. A test that leaks memory is reported as `LEAK` and counted as a failure — matching the behaviour of Zig's built-in test runner:
+zunit resets `std.testing.allocator_instance` before each test and checks for leaks after it completes. A test that leaks memory is reported as `LEAK` and counted as a failure — matching the behaviour of Zig's built-in test runner:
 
 ```
   LEAK  my allocating test
@@ -325,7 +325,7 @@ zuit resets `std.testing.allocator_instance` before each test and checks for lea
 
 The repository ships a ready-to-use workflow at `.github/workflows/ci.yml` that:
 
-1. Runs `zig build test` (zuit's own internal tests)
+1. Runs `zig build test` (zunit's own internal tests)
 2. Runs the example suite with `--output-file test-results.xml`
 3. Uploads the XML as a workflow artifact
 4. Publishes per-test pass/fail to the PR **Checks** tab via [`dorny/test-reporter`](https://github.com/dorny/test-reporter)
@@ -354,16 +354,16 @@ To use the same pattern in your own project, add to your workflow:
     fail-on-error: false
 ```
 
-The JUnit XML format produced by zuit is also compatible with **Jenkins** (JUnit plugin), **GitLab CI** (`junit` artifact reports), and any other tool that reads the standard JUnit schema.
+The JUnit XML format produced by zunit is also compatible with **Jenkins** (JUnit plugin), **GitLab CI** (`junit` artifact reports), and any other tool that reads the standard JUnit schema.
 
 ---
 
 ## Project structure
 
 ```
-zuit/
+zunit/
 ├── src/
-│   ├── zuit.zig          # public API (re-exports from runner + hooks)
+│   ├── zunit.zig          # public API (re-exports from runner + hooks)
 │   ├── runner.zig        # test orchestration, output, file writing
 │   └── hooks.zig         # hook name constants and classification helpers
 ├── examples/
@@ -395,10 +395,10 @@ zig build example -- --output-file results.txt      # + plain text
 ## Public API summary
 
 ```zig
-const zuit = @import("zuit");
+const zunit = @import("zunit");
 
 // Drive the entire test suite. Call this from pub fn main() in your
-// test_runner.zig — that makes zuit the runner for the test binary.
+// test_runner.zig — that makes zunit the runner for the test binary.
 pub fn run(config: Config) !void
 
 // Parse --output-file <path> or --output-file=<path> from process argv.

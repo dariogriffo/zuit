@@ -1,9 +1,9 @@
 const std = @import("std");
-const zuit = @import("zuit");
+const zunit = @import("zunit");
 
 pub fn main() !void {
-    try zuit.run(.{
+    try zunit.run(.{
         .output = .verbose_timing,
-        .output_file = try zuit.outputFileArg(std.heap.page_allocator),
+        .output_file = try zunit.outputFileArg(std.heap.page_allocator),
     });
 }

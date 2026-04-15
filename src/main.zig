@@ -1,4 +1,4 @@
-/// src/main.zig - Root file. Global hooks live here with the "zuit:" prefix.
+/// src/main.zig - Root file. Global hooks live here with the "zunit:" prefix.
 const std = @import("std");
 const server = @import("server.zig");
 
@@ -6,22 +6,22 @@ const server = @import("server.zig");
 // Global hooks — run for the ENTIRE suite, regardless of file
 // -----------------------------------------------------------------------
 
-test "zuit:beforeAll" {
+test "zunit:beforeAll" {
     // Runs once before any test in any file.
     std.debug.print("\n[global] beforeAll: suite starting\n", .{});
 }
 
-test "zuit:afterAll" {
+test "zunit:afterAll" {
     // Runs once after every test in every file.
     std.debug.print("[global] afterAll: suite complete\n", .{});
 }
 
-test "zuit:beforeEach" {
+test "zunit:beforeEach" {
     // Runs before every individual test across all files.
     std.debug.print("[global] beforeEach\n", .{});
 }
 
-test "zuit:afterEach" {
+test "zunit:afterEach" {
     // Runs after every individual test across all files.
     std.debug.print("[global] afterEach\n", .{});
 }
