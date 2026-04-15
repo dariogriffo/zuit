@@ -1,4 +1,4 @@
-/// runner.zig - Core zuit test runner logic.
+/// runner.zig - Core zunit test runner logic.
 const std = @import("std");
 const builtin = @import("builtin");
 const hooks = @import("hooks.zig");
@@ -23,7 +23,7 @@ pub const OutputStyle = enum {
     verbose_timing,
 };
 
-/// Configuration passed to `zuit.run(...)`.
+/// Configuration passed to `zunit.run(...)`.
 pub const Config = struct {
     /// What to do when a global hook fails.
     on_global_hook_failure: OnHookFailure = .abort,
@@ -93,7 +93,7 @@ pub fn run(config: Config) !void {
 
     const global_before_all_result = runNamedHooks(all_tests, .global_before_all);
     if (global_before_all_result) |_| {} else |err| {
-        printHookError("zuit:beforeAll", err);
+        printHookError("zunit:beforeAll", err);
         if (config.on_global_hook_failure == .abort) {
             printSummary(stats, config.output);
             std.process.exit(1);
@@ -169,7 +169,7 @@ pub fn run(config: Config) !void {
             }
             // global beforeEach (named)
             _ = runNamedHooks(all_tests, .global_before_each) catch |err| {
-                printHookError("zuit:beforeEach", err);
+                printHookError("zunit:beforeEach", err);
             };
             // per-file beforeEach
             _ = runNamedHooksForFile(all_tests, .file_before_each, file_path) catch |err| {
@@ -211,7 +211,7 @@ pub fn run(config: Config) !void {
             };
             // global afterEach (named)
             _ = runNamedHooks(all_tests, .global_after_each) catch |err| {
-                printHookError("zuit:afterEach", err);
+                printHookError("zunit:afterEach", err);
             };
             // global afterEach (config)
             if (config.after_each) |f| {
@@ -270,7 +270,7 @@ pub fn run(config: Config) !void {
     // 4. Run global afterAll hooks
     // -------------------------------------------------------------------------
     _ = runNamedHooks(all_tests, .global_after_all) catch |err| {
-        printHookError("zuit:afterAll", err);
+        printHookError("zunit:afterAll", err);
     };
     if (config.after_all) |f| {
         f() catch |err| {
@@ -303,8 +303,8 @@ pub fn run(config: Config) !void {
 ///
 /// Typical usage in test_runner.zig:
 ///
-///   try zuit.run(.{
-///       .output_file = try zuit.outputFileArg(std.heap.page_allocator),
+///   try zunit.run(.{
+///       .output_file = try zunit.outputFileArg(std.heap.page_allocator),
 ///   });
 ///
 /// Then run with:  zig build test -- --output-file results.xml
@@ -451,7 +451,7 @@ fn writeJUnitXml(w: *std.Io.Writer, records: []const TestRecord, stats: RunStats
 
     try w.writeAll("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     try w.print(
-        "<testsuites name=\"zuit\" tests=\"{d}\" failures=\"{d}\" errors=\"0\" skipped=\"{d}\" time=\"{d}.{d:0>9}\">\n",
+        "<testsuites name=\"zunit\" tests=\"{d}\" failures=\"{d}\" errors=\"0\" skipped=\"{d}\" time=\"{d}.{d:0>9}\">\n",
         .{ stats.total(), stats.failed, stats.skipped, total_ns / 1_000_000_000, total_ns % 1_000_000_000 },
     );
 

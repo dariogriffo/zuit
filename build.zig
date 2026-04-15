@@ -4,24 +4,24 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // The zuit module — this is what consumers import
-    const zuit_mod = b.addModule("zuit", .{
-        .root_source_file = b.path("src/zuit.zig"),
+    // The zunit module — this is what consumers import
+    const zunit_mod = b.addModule("zunit", .{
+        .root_source_file = b.path("src/zunit.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    // Internal tests for zuit itself
+    // Internal tests for zunit itself
     const lib_tests = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/zuit.zig"),
+            .root_source_file = b.path("src/zunit.zig"),
             .target = target,
             .optimize = optimize,
         }),
     });
 
     const run_lib_tests = b.addRunArtifact(lib_tests);
-    const test_step = b.step("test", "Run zuit's own tests");
+    const test_step = b.step("test", "Run zunit's own tests");
     test_step.dependOn(&run_lib_tests.step);
 
     // -------------------------------------------------------------------------
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    example_mod.addImport("zuit", zuit_mod);
+    example_mod.addImport("zunit", zunit_mod);
 
     const example_tests = b.addTest(.{
         .root_module = example_mod,

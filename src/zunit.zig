@@ -1,4 +1,4 @@
-/// zuit - A test lifecycle library for Zig
+/// zunit - A test lifecycle library for Zig
 /// Provides beforeAll, afterAll, beforeEach, afterEach hooks
 /// at both global and per-file scope, with configurable output and error handling.
 const std = @import("std");

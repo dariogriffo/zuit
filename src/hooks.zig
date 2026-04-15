@@ -1,14 +1,14 @@
 const std = @import("std");
 
-/// hooks.zig - Naming convention definitions for zuit lifecycle hooks.
+/// hooks.zig - Naming convention definitions for zunit lifecycle hooks.
 ///
 /// By convention, lifecycle hooks are test blocks named with special suffixes:
 ///
 ///   Global hooks (apply to the entire test suite):
-///     test "zuit:beforeAll" { ... }   - runs once before all tests
-///     test "zuit:afterAll"  { ... }   - runs once after all tests
-///     test "zuit:beforeEach" { ... }  - runs before every test
-///     test "zuit:afterEach" { ... }   - runs after every test
+///     test "zunit:beforeAll" { ... }   - runs once before all tests
+///     test "zunit:afterAll"  { ... }   - runs once after all tests
+///     test "zunit:beforeEach" { ... }  - runs before every test
+///     test "zunit:afterEach" { ... }   - runs after every test
 ///
 ///   Per-file hooks (apply only to tests in the same file):
 ///     test "beforeAll" { ... }    - runs once before all tests in this file
@@ -17,13 +17,13 @@ const std = @import("std");
 ///     test "afterEach" { ... }    - runs after each test in this file
 ///
 /// Per-file hooks are scoped by matching the file path prefix of the test name.
-/// Global hooks (prefixed with "zuit:") run regardless of file.
+/// Global hooks (prefixed with "zunit:") run regardless of file.
 
 // Global hook names (must match exactly, after the module path prefix)
-pub const global_before_all = "zuit:beforeAll";
-pub const global_after_all = "zuit:afterAll";
-pub const global_before_each = "zuit:beforeEach";
-pub const global_after_each = "zuit:afterEach";
+pub const global_before_all = "zunit:beforeAll";
+pub const global_after_all = "zunit:afterAll";
+pub const global_before_each = "zunit:beforeEach";
+pub const global_after_each = "zunit:afterEach";
 
 // Per-file hook suffixes (matched by test name after the last ".test.")
 pub const file_before_all = "beforeAll";

@@ -1,8 +1,8 @@
 .{
-    .name = .zuit,
+    .name = .zunit,
     .version = "0.2.0", // x-release-please-version
     .minimum_zig_version = "0.15.2",
-    .fingerprint = 0x94ab50942d5eedbe,
+    .fingerprint = 0x88bfdc3c58ee2119,
     .dependencies = .{},
 
     .paths = .{

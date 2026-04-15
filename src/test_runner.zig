@@ -1,10 +1,10 @@
 /// test_runner.zig
 /// Drop this file into your project root and point build.zig at it.
-/// This is the only file you need to write — zuit handles everything else.
-const zuit = @import("zuit");
+/// This is the only file you need to write — zunit handles everything else.
+const zunit = @import("zunit");
 
 pub fn main() !void {
-    try zuit.run(.{
+    try zunit.run(.{
         // Optional: programmatic global hooks (in addition to named ones)
         // .before_all = myGlobalSetup,
         // .after_all  = myGlobalTeardown,
