@@ -4,7 +4,17 @@ A custom test runner and lifecycle library for Zig. It replaces the built-in tes
 
 **How it works:** Zig lets you swap the default test runner by pointing your build at a file that provides `pub fn main()`. zunit's runner is that file — it receives all test functions via `builtin.test_functions`, manages the full hook lifecycle around each one, tracks results, and controls the process exit code. Your `test_runner.zig` simply calls `zunit.run(...)` with whatever configuration you need.
 
-> Requires Zig **0.15.2** or later.
+> **Zig version support**
+>
+> | zunit tag | Zig versions     |
+> | --------- | ---------------- |
+> | `v2.x`    | `0.16.0` and up  |
+> | `v1.0.0`  | `0.15.2`         |
+>
+> Pick the tag that matches your compiler. The two lines have different APIs
+> — `v2.0.0` reworked `zunit.run` to take an `std.Io` parameter because all
+> clock and file I/O moved into the `std.Io` interface in Zig 0.16. See the
+> [Installation](#installation) section for the exact pin.
 
 ---
 
@@ -23,16 +33,43 @@ A custom test runner and lifecycle library for Zig. It replaces the built-in tes
 
 ## Installation
 
-Add zunit to your `build.zig.zon`:
+Add zunit to your `build.zig.zon`. The easiest way is `zig fetch`, which writes both the URL and the integrity hash for you. **Pick the line that matches your Zig version:**
+
+### Zig 0.16.0 and later
+
+```sh
+zig fetch --save git+https://github.com/dariogriffo/zunit#v2.0.0
+```
 
 ```zig
 .dependencies = .{
     .zunit = .{
-        .url = "https://github.com/yourname/zunit/archive/<commit>.tar.gz",
-        .hash = "<hash>",
+        .url  = "git+https://github.com/dariogriffo/zunit#v2.0.0",
+        .hash = "<filled in by zig fetch>",
     },
 },
 ```
+
+### Zig 0.15.2
+
+```sh
+zig fetch --save git+https://github.com/dariogriffo/zunit#v1.0.0
+```
+
+```zig
+.dependencies = .{
+    .zunit = .{
+        .url  = "git+https://github.com/dariogriffo/zunit#v1.0.0",
+        .hash = "<filled in by zig fetch>",
+    },
+},
+```
+
+> The `v1.x` and `v2.x` lines have different runtime APIs. The setup snippet
+> in this README is for **v2.x (Zig 0.16+)**. If you are on Zig 0.15.2,
+> consult the [v1.0.0 README](https://github.com/dariogriffo/zunit/blob/v1.0.0/README.md)
+> — `pub fn main()` takes no parameters there, and `zunit.run` takes only
+> the config (no `io`).
 
 In `build.zig`, fetch the dependency, expose the module, and wire it into your test step:
 
@@ -71,15 +108,23 @@ Create `test_runner.zig` in your project root. This file becomes the entry point
 const std = @import("std");
 const zunit = @import("zunit");
 
-pub fn main() !void {
-    try zunit.run(.{
+pub fn main(init: std.process.Init) !void {
+    try zunit.run(init.io, .{
         .on_global_hook_failure = .abort,
         .on_file_hook_failure   = .skip_remaining,
         .output                 = .verbose_timing,
-        .output_file = try zunit.outputFileArg(std.heap.page_allocator),
+        .output_file = try zunit.outputFileArg(
+            init.arena.allocator(),
+            init.minimal.args,
+        ),
     });
 }
 ```
+
+> Why `std.process.Init`? In Zig 0.16, clocks and file I/O go through the
+> `std.Io` interface, and command-line arguments arrive via
+> `std.process.Init`. zunit needs both, so its `main` takes the full `Init`
+> and forwards `init.io` and `init.minimal.args`.
 
 Run your tests:
 
@@ -157,8 +202,8 @@ fn teardownDatabase() !void { ... }
 fn resetState() !void { ... }
 fn flushLogs() !void { ... }
 
-pub fn main() !void {
-    try zunit.run(.{
+pub fn main(init: std.process.Init) !void {
+    try zunit.run(init.io, .{
         .before_all  = setupDatabase,
         .after_all   = teardownDatabase,
         .before_each = resetState,
@@ -207,10 +252,10 @@ Hook test blocks (all `beforeAll`, `afterAll`, etc.) are **never counted** in th
 
 ## Configuration reference
 
-Pass a `Config` literal to `zunit.run(...)`. All fields have defaults so you only need to specify what you want to change.
+Pass a `Config` literal as the second argument to `zunit.run(io, config)`. All fields have defaults so you only need to specify what you want to change.
 
 ```zig
-try zunit.run(.{
+try zunit.run(init.io, .{
     .on_global_hook_failure = .abort,          // default
     .on_file_hook_failure   = .skip_remaining, // default
     .output                 = .verbose,        // default
@@ -255,10 +300,13 @@ Set it at compile time:
 .output_file = "results.xml",
 ```
 
-Or read it from the command line at runtime with the `outputFileArg` helper:
+Or read it from the command line at runtime with the `outputFileArg` helper. Pass `init.minimal.args` so it can scan the process argv, and `init.arena.allocator()` so the parsed path lives until process exit without manual cleanup:
 
 ```zig
-.output_file = try zunit.outputFileArg(std.heap.page_allocator),
+.output_file = try zunit.outputFileArg(
+    init.arena.allocator(),
+    init.minimal.args,
+),
 ```
 
 Then pass it when running:
@@ -395,16 +443,23 @@ zig build example -- --output-file results.txt      # + plain text
 ## Public API summary
 
 ```zig
+const std   = @import("std");
 const zunit = @import("zunit");
 
-// Drive the entire test suite. Call this from pub fn main() in your
-// test_runner.zig — that makes zunit the runner for the test binary.
-pub fn run(config: Config) !void
+// Drive the entire test suite. Call this from
+// pub fn main(init: std.process.Init) in your test_runner.zig — that makes
+// zunit the runner for the test binary. `io` powers the monotonic clock
+// and JUnit-XML file writes.
+pub fn run(io: std.Io, config: Config) !void
 
-// Parse --output-file <path> or --output-file=<path> from process argv.
+// Parse --output-file <path> or --output-file=<path> from the given argv.
 // Returns null if the flag is absent. The returned slice is allocated with
-// the given allocator and owned by the caller.
-pub fn outputFileArg(allocator: std.mem.Allocator) !?[]const u8
+// the given allocator and owned by the caller; pair with init.arena to let
+// the process arena free it on exit.
+pub fn outputFileArg(
+    allocator: std.mem.Allocator,
+    args: std.process.Args,
+) !?[]const u8
 
 pub const Config = struct {
     on_global_hook_failure: OnHookFailure = .abort,
