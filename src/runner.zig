@@ -69,13 +69,22 @@ const TestRecord = struct {
 };
 
 /// Run the full test suite with the given config.
-/// Call this from your test_runner.zig's `pub fn main()`.
-pub fn run(config: Config) !void {
+///
+/// Call this from your test_runner.zig's `pub fn main(init: std.process.Init)`.
+/// The `io` parameter is used for monotonic-clock timing and any future
+/// I/O zunit may need; in 0.16, clocks are part of the Io interface.
+///
+///   pub fn main(init: std.process.Init) !void {
+///       try zunit.run(init.io, .{
+///           .output_file = try zunit.outputFileArg(init.gpa, init.minimal.args),
+///       });
+///   }
+pub fn run(io: std.Io, config: Config) !void {
     const all_tests = builtin.test_functions;
     var stats = RunStats{};
     const gpa = std.heap.page_allocator;
 
-    var records = std.ArrayList(TestRecord){};
+    var records: std.ArrayList(TestRecord) = .empty;
     defer records.deinit(gpa);
 
     // -------------------------------------------------------------------------
@@ -103,7 +112,7 @@ pub fn run(config: Config) !void {
     // -------------------------------------------------------------------------
     // 2. Gather unique file paths so we can scope per-file hooks
     // -------------------------------------------------------------------------
-    var file_paths = std.ArrayList([]const u8){};
+    var file_paths: std.ArrayList([]const u8) = .empty;
     defer file_paths.deinit(gpa);
 
     for (all_tests) |t| {
@@ -178,9 +187,10 @@ pub fn run(config: Config) !void {
 
             // Run the actual test
             std.testing.allocator_instance = .{};
-            var timer: ?std.time.Timer = std.time.Timer.start() catch null;
+            const t_start = std.Io.Clock.now(.awake, io);
             const result = t.func();
-            const elapsed: u64 = if (timer) |*tmr| tmr.read() else 0;
+            const t_end = std.Io.Clock.now(.awake, io);
+            const elapsed: u64 = @intCast(t_end.nanoseconds - t_start.nanoseconds);
             const leaked = std.testing.allocator_instance.deinit() == .leak;
 
             if (result) |_| {
@@ -241,9 +251,10 @@ pub fn run(config: Config) !void {
         if (fp.len != 0) continue;
 
         std.testing.allocator_instance = .{};
-        const start: u64 = @as(u64, @intCast(@max(0, std.time.milliTimestamp())));
+        const t_start = std.Io.Clock.now(.awake, io);
         const result = t.func();
-        const elapsed: u64 = @as(u64, @intCast(@max(0, std.time.milliTimestamp()))) - start;
+        const t_end = std.Io.Clock.now(.awake, io);
+        const elapsed: u64 = @intCast(t_end.nanoseconds - t_start.nanoseconds);
         const leaked = std.testing.allocator_instance.deinit() == .leak;
 
         if (result) |_| {
@@ -284,7 +295,7 @@ pub fn run(config: Config) !void {
     printSummary(stats, config.output);
 
     if (config.output_file) |path| {
-        writeOutputFile(path, records.items, stats, config.output) catch |err| {
+        writeOutputFile(io, path, records.items, stats, config.output) catch |err| {
             std.debug.print("  WARNING: failed to write output file '{s}': {}\n", .{ path, err });
         };
     }
@@ -299,32 +310,45 @@ pub fn run(config: Config) !void {
 // -----------------------------------------------------------------------------
 
 /// Returns the value of `--output-file <path>` (or `--output-file=<path>`) from
-/// the process argv, or null if the flag is absent.
+/// the given argv, or null if the flag is absent.
+///
+/// In Zig 0.16, command-line arguments travel through `std.process.Init`
+/// passed to `main` — they are no longer accessible via a global like
+/// `std.process.argsAlloc`. Pass `init.minimal.args` straight through.
+///
+/// The returned slice is owned by `allocator` and lives until the caller frees
+/// it. The natural choice is `init.arena.allocator()`, which is freed
+/// automatically on process exit.
 ///
 /// Typical usage in test_runner.zig:
 ///
-///   try zunit.run(.{
-///       .output_file = try zunit.outputFileArg(std.heap.page_allocator),
-///   });
+///   pub fn main(init: std.process.Init) !void {
+///       try zunit.run(init.io, .{
+///           .output_file = try zunit.outputFileArg(
+///               init.arena.allocator(),
+///               init.minimal.args,
+///           ),
+///       });
+///   }
 ///
 /// Then run with:  zig build test -- --output-file results.xml
-pub fn outputFileArg(allocator: std.mem.Allocator) !?[]const u8 {
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+pub fn outputFileArg(
+    allocator: std.mem.Allocator,
+    args: std.process.Args,
+) !?[]const u8 {
+    var it = try std.process.Args.Iterator.initAllocator(args, allocator);
+    defer it.deinit();
 
-    var i: usize = 1;
-    while (i < args.len) : (i += 1) {
-        const arg = args[i];
-
+    _ = it.next(); // skip argv[0]
+    while (it.next()) |arg| {
         // --output-file=path
         if (std.mem.startsWith(u8, arg, "--output-file=")) {
             return try allocator.dupe(u8, arg["--output-file=".len..]);
         }
-
         // --output-file path
         if (std.mem.eql(u8, arg, "--output-file")) {
-            if (i + 1 < args.len) {
-                return try allocator.dupe(u8, args[i + 1]);
+            if (it.next()) |val| {
+                return try allocator.dupe(u8, val);
             }
         }
     }
@@ -390,16 +414,17 @@ fn printSummary(stats: RunStats, style: OutputStyle) void {
 // -----------------------------------------------------------------------------
 
 fn writeOutputFile(
+    io: std.Io,
     path: []const u8,
     records: []const TestRecord,
     stats: RunStats,
     style: OutputStyle,
 ) !void {
-    const file = try std.fs.cwd().createFile(path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().createFile(io, path, .{});
+    defer file.close(io);
 
     var buf: [8192]u8 = undefined;
-    var w = file.writerStreaming(&buf);
+    var w = file.writerStreaming(io, &buf);
     defer w.end() catch {};
 
     if (std.mem.endsWith(u8, path, ".xml")) {
@@ -457,7 +482,7 @@ fn writeJUnitXml(w: *std.Io.Writer, records: []const TestRecord, stats: RunStats
 
     // Collect unique file paths (preserving order)
     const gpa = std.heap.page_allocator;
-    var fps = std.ArrayList([]const u8){};
+    var fps: std.ArrayList([]const u8) = .empty;
     defer fps.deinit(gpa);
     for (records) |rec| {
         const fp = hooks.extractFilePath(rec.full_name);
