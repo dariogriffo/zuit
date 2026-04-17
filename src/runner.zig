@@ -69,8 +69,17 @@ const TestRecord = struct {
 };
 
 /// Run the full test suite with the given config.
-/// Call this from your test_runner.zig's `pub fn main()`.
-pub fn run(config: Config) !void {
+///
+/// Call this from your test_runner.zig's `pub fn main(init: std.process.Init)`.
+/// The `io` parameter is used for monotonic-clock timing and any future
+/// I/O zunit may need; in 0.16, clocks are part of the Io interface.
+///
+///   pub fn main(init: std.process.Init) !void {
+///       try zunit.run(init.io, .{
+///           .output_file = try zunit.outputFileArg(init.gpa, init.minimal.args),
+///       });
+///   }
+pub fn run(io: std.Io, config: Config) !void {
     const all_tests = builtin.test_functions;
     var stats = RunStats{};
     const gpa = std.heap.page_allocator;
@@ -178,9 +187,10 @@ pub fn run(config: Config) !void {
 
             // Run the actual test
             std.testing.allocator_instance = .{};
-            var timer: ?std.time.Timer = std.time.Timer.start() catch null;
+            const t_start = std.Io.Clock.now(.awake, io);
             const result = t.func();
-            const elapsed: u64 = if (timer) |*tmr| tmr.read() else 0;
+            const t_end = std.Io.Clock.now(.awake, io);
+            const elapsed: u64 = @intCast(t_end.nanoseconds - t_start.nanoseconds);
             const leaked = std.testing.allocator_instance.deinit() == .leak;
 
             if (result) |_| {
@@ -241,9 +251,10 @@ pub fn run(config: Config) !void {
         if (fp.len != 0) continue;
 
         std.testing.allocator_instance = .{};
-        const start: u64 = @as(u64, @intCast(@max(0, std.time.milliTimestamp())));
+        const t_start = std.Io.Clock.now(.awake, io);
         const result = t.func();
-        const elapsed: u64 = @as(u64, @intCast(@max(0, std.time.milliTimestamp()))) - start;
+        const t_end = std.Io.Clock.now(.awake, io);
+        const elapsed: u64 = @intCast(t_end.nanoseconds - t_start.nanoseconds);
         const leaked = std.testing.allocator_instance.deinit() == .leak;
 
         if (result) |_| {
@@ -284,7 +295,7 @@ pub fn run(config: Config) !void {
     printSummary(stats, config.output);
 
     if (config.output_file) |path| {
-        writeOutputFile(path, records.items, stats, config.output) catch |err| {
+        writeOutputFile(io, path, records.items, stats, config.output) catch |err| {
             std.debug.print("  WARNING: failed to write output file '{s}': {}\n", .{ path, err });
         };
     }
@@ -302,15 +313,21 @@ pub fn run(config: Config) !void {
 /// the given argv, or null if the flag is absent.
 ///
 /// In Zig 0.16, command-line arguments travel through `std.process.Init`
-/// (or the smaller `std.process.Init.Minimal`) passed to `main` — they are
-/// no longer accessible via a global like `std.process.argsAlloc`. Pass the
-/// `args` field straight through.
+/// passed to `main` — they are no longer accessible via a global like
+/// `std.process.argsAlloc`. Pass `init.minimal.args` straight through.
+///
+/// The returned slice is owned by `allocator` and lives until the caller frees
+/// it. The natural choice is `init.arena.allocator()`, which is freed
+/// automatically on process exit.
 ///
 /// Typical usage in test_runner.zig:
 ///
-///   pub fn main(init: std.process.Init.Minimal) !void {
-///       try zunit.run(.{
-///           .output_file = try zunit.outputFileArg(std.heap.page_allocator, init.args),
+///   pub fn main(init: std.process.Init) !void {
+///       try zunit.run(init.io, .{
+///           .output_file = try zunit.outputFileArg(
+///               init.arena.allocator(),
+///               init.minimal.args,
+///           ),
 ///       });
 ///   }
 ///
@@ -397,16 +414,17 @@ fn printSummary(stats: RunStats, style: OutputStyle) void {
 // -----------------------------------------------------------------------------
 
 fn writeOutputFile(
+    io: std.Io,
     path: []const u8,
     records: []const TestRecord,
     stats: RunStats,
     style: OutputStyle,
 ) !void {
-    const file = try std.fs.cwd().createFile(path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().createFile(io, path, .{});
+    defer file.close(io);
 
     var buf: [8192]u8 = undefined;
-    var w = file.writerStreaming(&buf);
+    var w = file.writerStreaming(io, &buf);
     defer w.end() catch {};
 
     if (std.mem.endsWith(u8, path, ".xml")) {
