@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="zunit" tests="21" failures="0" errors="0" skipped="0" time="0.000357845">
+  <testsuite name="runner" tests="11" failures="0" errors="0" skipped="0" time="0.000049462">
+    <testcase name="outputDirArg: equals form" classname="runner" time="0.000000196"/>
+    <testcase name="basenameNoExt: with extension" classname="runner" time="0.000003626"/>
+    <testcase name="basenameNoExt: no extension" classname="runner" time="0.000000325"/>
+    <testcase name="basenameNoExt: just filename" classname="runner" time="0.000000306"/>
+    <testcase name="parseBoolValue" classname="runner" time="0.000000661"/>
+    <testcase name="resolveOutputPaths: defaults output_file when consolidating" classname="runner" time="0.000031425"/>
+    <testcase name="resolveOutputPaths: joins relative output_file under output_dir" classname="runner" time="0.000012010"/>
+    <testcase name="resolveOutputPaths: leaves absolute output_file alone" classname="runner" time="0.000000206"/>
+    <testcase name="resolveOutputPaths: no-op when output_dir is null" classname="runner" time="0.000000144"/>
+    <testcase name="resolveOutputPaths: no-op when neither flag set" classname="runner" time="0.000000234"/>
+    <testcase name="ConsolidateRequiresOutputDir error exists" classname="runner" time="0.000000329"/>
+  </testsuite>
+  <testsuite name="merge" tests="9" failures="0" errors="0" skipped="0" time="0.000308297">
+    <testcase name="parseAttrU64: found" classname="merge" time="0.000005117"/>
+    <testcase name="parseAttrU64: absent" classname="merge" time="0.000000903"/>
+    <testcase name="parseAttrTimeNs: with fraction" classname="merge" time="0.000001180"/>
+    <testcase name="parseAttrTimeNs: whole seconds" classname="merge" time="0.000000550"/>
+    <testcase name="parseSuites: single suite" classname="merge" time="0.000046849"/>
+    <testcase name="parseSuites: two suites in one fragment" classname="merge" time="0.000034961"/>
+    <testcase name="writesMergedXml: three fragments sum to correct totals" classname="merge" time="0.000081428"/>
+    <testcase name="writesMergedXml: empty fragments list produces zero-total header" classname="merge" time="0.000014163"/>
+    <testcase name="writesMergedXml: corrupt fragment is skipped, others proceed" classname="merge" time="0.000123146"/>
+  </testsuite>
+  <testsuite name="root" tests="1" failures="0" errors="0" skipped="0" time="0.000000086">
+    <testcase name="zunit.test_0" classname="root" time="0.000000086"/>
+  </testsuite>
+</testsuites>
