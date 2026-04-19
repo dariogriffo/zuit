@@ -2,6 +2,13 @@
 
 ## [2.1.0](https://github.com/dariogriffo/zunit/compare/v2.0.0...v2.1.0) (2026-04-19)
 
+
+### Features
+
+* multi-binary test suits ([#9](https://github.com/dariogriffo/zunit/issues/9)) ([dd3f152](https://github.com/dariogriffo/zunit/commit/dd3f152738c8faaeea51f37183859ebfba97b3b3))
+
+## [2.1.0](https://github.com/dariogriffo/zunit/compare/v2.0.0...v2.1.0) (2026-04-19)
+
 ### Features
 
 * **multi-binary test suites**: add `testSuite` build helper for fan-out test runs with automatic JUnit XML consolidation
