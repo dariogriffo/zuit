@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/dariogriffo/zunit/compare/v2.1.0...v2.1.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* ci errors ([#11](https://github.com/dariogriffo/zunit/issues/11)) ([428513a](https://github.com/dariogriffo/zunit/commit/428513a30e4f32f5a83caa3941259a49fa1aa4d1))
+
 ## [2.1.0](https://github.com/dariogriffo/zunit/compare/v2.0.0...v2.1.0) (2026-04-19)
 
 
