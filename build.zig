@@ -54,78 +54,25 @@ pub fn build(b: *std.Build) void {
     // Run with:  zig build example-suite
     // Produces: zig-out/example-suite-results.xml (merged JUnit from 2 binaries)
     //
-    // This uses the testSuite() helper defined below. In a real consumer project,
-    // this would be:
+    // This dogfoods the testSuite helper via `testSuiteFromModule`, which is
+    // the module-based variant. In a real consumer project you'd use
+    // `testSuite` instead:
+    //
     //   const zunit_build = @import("zunit");
     //   const zunit_dep = b.dependency("zunit", .{ .target = target, .optimize = optimize });
     //   const suite = zunit_build.testSuite(b, zunit_dep, .{ ... });
     // -------------------------------------------------------------------------
-    const suite_runner_src =
-        \\const std = @import("std");
-        \\const zunit = @import("zunit");
-        \\
-        \\pub fn main(init: std.process.Init) !void {
-        \\    const alloc = init.arena.allocator();
-        \\    try zunit.run(init.io, .{
-        \\        .output_file = try zunit.outputFileArg(alloc, init.minimal.args),
-        \\        .output_dir = try zunit.outputDirArg(alloc, init.minimal.args),
-        \\        .run_id = try zunit.runIdArg(alloc, init.minimal.args),
-        \\        .consolidate_artifacts = try zunit.consolidateArtifactsArg(init.minimal.args),
-        \\    });
-        \\}
-    ;
-    const suite_wf = b.addWriteFiles();
-    const suite_runner_path = suite_wf.add("zunit_test_runner.zig", suite_runner_src);
-
-    // Clean stale fragments before each run
-    const suite_clean = b.addSystemCommand(&.{ "sh", "-c", "rm -rf zig-out/example-suite-fragments || true" });
-
-    const suite_output_file = "zig-out/example-suite-results.xml";
-    const suite_output_dir = "zig-out/example-suite-fragments";
-    const suite_run_id = suiteRunId(b);
-
-    const suite_files = [_][]const u8{
-        "examples/basic/src/math.zig",
-        "examples/basic/src/strings.zig",
-    };
+    const example_suite = testSuiteFromModule(b, zunit_mod, .{
+        .target = target,
+        .optimize = optimize,
+        .output_file = "zig-out/example-suite-results.xml",
+        .output_dir = "zig-out/example-suite-fragments",
+    });
+    example_suite.addFile("examples/basic/src/math.zig");
+    example_suite.addFile("examples/basic/src/strings.zig");
 
     const example_suite_step = b.step("example-suite", "Run multi-binary suite example (produces merged XML)");
-
-    for (suite_files) |path| {
-        const mod = b.createModule(.{
-            .root_source_file = b.path(path),
-            .target = target,
-            .optimize = optimize,
-        });
-        mod.addImport("zunit", zunit_mod);
-
-        const t = b.addTest(.{
-            .root_module = mod,
-            .test_runner = .{
-                .path = suite_runner_path,
-                .mode = .simple,
-            },
-        });
-
-        const run_t = b.addRunArtifact(t);
-        run_t.addArgs(&.{
-            b.fmt("--output-file={s}", .{suite_output_file}),
-            b.fmt("--output-dir={s}", .{suite_output_dir}),
-            b.fmt("--run-id={s}", .{suite_run_id}),
-            "--consolidate-artifacts=true",
-        });
-        if (b.args) |args| run_t.addArgs(args);
-        run_t.step.dependOn(&suite_clean.step);
-        example_suite_step.dependOn(&run_t.step);
-    }
-}
-
-/// Derive a stable run ID for this build invocation using wall-clock seconds.
-fn suiteRunId(b: *std.Build) []const u8 {
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
-    const secs: u64 = @intCast(ts.sec);
-    return b.fmt("run-{x}", .{secs});
+    example_suite_step.dependOn(example_suite.step());
 }
 
 // =============================================================================
@@ -212,7 +159,7 @@ pub const TestSuite = struct {
             run_t.step.dependOn(&cs.step);
         }
 
-        self.run_steps.append(run_t) catch @panic("OOM");
+        self.run_steps.append(self.b.allocator, run_t) catch @panic("OOM");
     }
 
     pub fn addFiles(self: *TestSuite, paths: []const []const u8) void {
@@ -241,6 +188,17 @@ pub const TestSuite = struct {
 pub fn testSuite(
     b: *std.Build,
     zunit_dep: *std.Build.Dependency,
+    opts: TestSuiteOptions,
+) *TestSuite {
+    return testSuiteFromModule(b, zunit_dep.module("zunit"), opts);
+}
+
+/// Like `testSuite`, but takes the zunit module directly. Useful for zunit's
+/// own build.zig (which dogfoods the helper without depending on itself) and
+/// for any consumer that already has a `*std.Build.Module` in hand.
+pub fn testSuiteFromModule(
+    b: *std.Build,
+    zunit_mod: *std.Build.Module,
     opts: TestSuiteOptions,
 ) *TestSuite {
     var ts: std.os.linux.timespec = undefined;
@@ -274,11 +232,11 @@ pub fn testSuite(
     suite.* = .{
         .b = b,
         .opts = opts,
-        .zunit_mod = zunit_dep.module("zunit"),
+        .zunit_mod = zunit_mod,
         .run_id = run_id,
         .runner_path = runner_path,
         .cleanup_step = cleanup,
-        .run_steps = std.ArrayList(*std.Build.Step.Run).init(b.allocator),
+        .run_steps = .empty,
     };
     return suite;
 }
