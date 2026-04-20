@@ -354,7 +354,7 @@ pub fn run(io: std.Io, config_in: Config) !void {
         // (The $ZUNIT_RUN_ID env var fallback is available when callers pass
         // `config.run_id = try zunit.runIdArg(alloc, args)` and set it via
         // the environment; we omit a direct getenv call to avoid the libc dep.)
-        const run_id = config.run_id orelse generateRunId(gpa) catch "zunit-0-0";
+        const run_id = config.run_id orelse generateRunId(io, gpa) catch "zunit-0-0";
 
         writeFragment(io, gpa, out_dir, run_id, records.items, stats) catch |err| {
             std.debug.print("  WARNING: failed to write test fragment: {}\n", .{err});
@@ -383,13 +383,14 @@ pub fn run(io: std.Io, config_in: Config) !void {
 // Fragment helpers
 // -----------------------------------------------------------------------------
 
-/// Generate a unique run id like "zunit-<unix-secs>-<pid>".
-fn generateRunId(alloc: std.mem.Allocator) ![]const u8 {
-    const pid: u32 = @intCast(std.os.linux.getpid());
-    var ts: std.os.linux.timespec = undefined;
-    _ = std.os.linux.clock_gettime(.REALTIME, &ts);
-    const secs: u64 = @intCast(ts.sec);
-    return std.fmt.allocPrint(alloc, "zunit-{d}-{d}", .{ secs, pid });
+/// Generate a unique run id like "zunit-<16-hex-random>".
+/// Uses the IO-provided randomness so it works cross-platform without
+/// pulling in OS-specific time/getpid syscalls.
+fn generateRunId(io: std.Io, alloc: std.mem.Allocator) ![]const u8 {
+    var buf: [8]u8 = undefined;
+    io.random(&buf);
+    const id = std.mem.readInt(u64, &buf, .little);
+    return std.fmt.allocPrint(alloc, "zunit-{x}", .{id});
 }
 
 /// Derive a safe filename base from a binary path like "/path/to/foo-test".
