@@ -408,7 +408,7 @@ fn basenameNoExt(path: []const u8) []const u8 {
 }
 
 /// Write this process's JUnit XML as a fragment to
-/// `<out_dir>/<run_id>/<argv0-basename>-<pid>.xml`.
+/// `<out_dir>/<run_id>/<random>.xml`.
 fn writeFragment(
     io: std.Io,
     alloc: std.mem.Allocator,
@@ -417,9 +417,6 @@ fn writeFragment(
     records: []const TestRecord,
     stats: RunStats,
 ) !void {
-    // Determine argv0 basename for the fragment file name
-    const pid: u32 = @intCast(std.os.linux.getpid());
-
     // Build the directory path: <out_dir>/<run_id>
     const frag_dir_path = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ out_dir, run_id });
     defer alloc.free(frag_dir_path);
@@ -430,8 +427,13 @@ fn writeFragment(
         else => return err,
     };
 
-    // Build fragment filename: <pid>.xml (simple, unique per process)
-    const frag_filename = try std.fmt.allocPrint(alloc, "{d}.xml", .{pid});
+    // Build a per-process unique filename using IO-provided randomness so
+    // concurrent test binaries writing into the same run_id directory don't
+    // collide. Avoids OS-specific getpid() calls.
+    var rand_buf: [8]u8 = undefined;
+    io.random(&rand_buf);
+    const rand_id = std.mem.readInt(u64, &rand_buf, .little);
+    const frag_filename = try std.fmt.allocPrint(alloc, "{x}.xml", .{rand_id});
     defer alloc.free(frag_filename);
 
     const frag_path = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ frag_dir_path, frag_filename });
