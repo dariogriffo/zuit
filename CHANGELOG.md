@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/dariogriffo/zunit/compare/v2.2.0...v2.3.0) (2026-04-20)
+
+
+### Features
+
+* Add multi-os testing ([#15](https://github.com/dariogriffo/zunit/issues/15)) ([d9b9fa1](https://github.com/dariogriffo/zunit/commit/d9b9fa1ddf06e707984cc75ce8895d5750884cf1))
+
 ## [2.2.0](https://github.com/dariogriffo/zunit/compare/v2.1.1...v2.2.0) (2026-04-20)
 
 
